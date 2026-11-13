@@ -1,119 +1,113 @@
 ---
-title: "演習 5 - エージェント スキルを使う"
+title: "レッスン 5 - 品質チェック skill をカスタマイズして使う"
+description: "既存の quality-checks skill を確認し、レポート形式をカスタマイズして、フィルタリングを検証するために使います。"
 authors:
   - geektrainer
-lastUpdated: 2026-06-30
+lastUpdated: 2026-09-29
 ---
 
-アプリ開発では、build の生成、test の実行、pull request の作成といった繰り返し可能なタスクがよく発生します。**Agent skill** を使うと、Copilot やほかの AI agent に対して、それらのタスクをどのように実行すべきかを示すガイダンスを与えられます。skill は、agent が必要に応じて読み込める instruction、script、resource のフォルダーです。[Agent Skills は open standard][agent-skills-repo] であり、さまざまな agent が利用しています。そのため、同じ skill を Copilot Chat の agent mode、Copilot cloud agent、Copilot CLI、GitHub Copilot app の間で共有できます。
+コードを書くことは、コードを書くことだけではありません。手動でコードの動作を確認し、instruction ファイルを使って標準に従うようにしてきました。では、test や lint、継続的インテグレーション（CI）のほかの作業はどうでしょうか。
 
-skill はプロジェクトの `.github/skills` フォルダー、またはグローバルな `~/.copilot/skills` に配置します。各 skill はフォルダー単位で、YAML frontmatter（`name` と `description`）を持つ `SKILL.md` ファイルと、その後に続く markdown の instruction で構成されます。
+こうした作業には、**agent skill** が最適です。skill を使うと、test や lint のような操作を適切に実行する方法を Copilot に伝えられます。
 
-```yaml
----
-name: make-contribution
-description: All changes to code must follow the guidance documented in the repository. Before any issue is filed, branch is made, commits generated, or pull request (or PR) created, a search must be done to ensure the right steps are followed. Whenever asked to create an issue, commit messages, to push code, or create a PR, use this skill so everything is done correctly.
----
-```
+このレッスンでは、次のことを行います。
 
-skill には、script、asset、参照資料を含むサブフォルダーを追加することもできます。全体の構造は [agent skills specification][agent-skills-spec] で説明されています。
-
-> [!TIP]
-> skill は動的に読み込まれます。どの skill が適用されるかは、agent が `description` フィールドを基に判断します。明確でシナリオに即した説明にすることが、使われる skill と無視される skill を分けます。
-
-[agent-skills-repo]: https://github.com/agentskills/agentskills
-[agent-skills-spec]: https://agentskills.io/specification
-team の pull request が、定められた仕様に確実に従うよう skill を使う方法を見ていきましょう。
+- 既存の `quality-checks` skill を確認します。
+- 結果の書式をカスタマイズします。
+- skill を再読み込みして実行します。
 
 ## シナリオ
 
-チームでは pull request（PR）に対して、次の要件を定めています。
+Tailspin Toys では、unit test、lint、type check に `quality-checks` skill を使っています。チームは、結果を読みやすくするため、レポートを改善したいと考えています。
 
-- 明確な commit message にし、ファイルは論理的にグループ化する。
-- PR を作成する前に、すべての test が通過している必要がある。
-- 各 PR には次のセクションを含める必要がある。
-    - 変更を行った理由の説明。
-    - 変更したファイルの概要。
-    - 重要なコード ブロックの抜粋。
-    - 行った変更の詳細をまとめた説明。
+## instruction、script、resource
 
-チームでは、Copilot を使ってコードや PR を生成しているため、AI ツールがこれらの要件に従うことを確実にしたいと考えています。
+agent skill は、再利用可能なタスクの instruction、実行可能な script、補助リソースをまとめたもので、agent が必要に応じて読み込みます。基本的には、skill 名のフォルダーと、その中にある `SKILL.md` で構成されます。Markdown には、skill の名前と説明を定義する frontmatter、skill の概要、呼び出すタイミングのガイダンスが含まれます。skill のフォルダーには、呼び出し時に利用する script やその他のリソースを含むサブフォルダーも追加できます。
 
-この演習では、次のことを行います。
+> [!NOTE]
+> skill に追加のフォルダーやファイルは必須ではありません。Tailspin Toys の `quality-checks` skill は、プロジェクトにある既存の command を使うため、`SKILL.md` のみで構成されています。
 
-- pull request 作成用に既存の skill を確認する。
-- AI agent がどのように skill を利用するかを学ぶ。
-- skill の助けを借りて、ガイドラインに沿った PR を作成する。
+skill は、チームで共有・再利用できるようプロジェクトの `.github/skills` フォルダーに置くことも、ユーザーの skill フォルダー `~/.copilot/skills` に置くこともできます。
 
-## skill を実行する
+## skill を確認する
 
-skill は、agent が必要だと判断したときに動的に読み込まれます。どの skill を使うかの判断は、`SKILL.md` ファイル内の description によって決まります。そのため、skill の用途を明確に定義した説明を書くことが重要です。
+unit test、lint、type check を実行するために Tailspin Toys チームが作成した `quality-checks` skill を確認しましょう。
 
-## PR skill を確認する
+1. Codespace に戻り、`.github/skills/quality-checks/SKILL.md` を開きます。
+2. 先頭の `name` と `description` を読みます。description は Copilot が skill を呼び出すタイミングを判断するのに役立ちます。
+3. instruction を読み、test と lint の手順をどのように案内しているか確認します。
+4. skill にはまだ **Results output formatting** セクションがないことを確認します。
 
-Tailspin Toys には PR 作成に関する要件があるため、AI ツールがこれらのガイドラインに従った PR を生成できるように skill が用意されています。どのような動作をするか理解するために、その skill を確認しましょう。
+## 変更前に skill を実行する
 
-1. `.github/skills/make-contribution/SKILL.md` を開きます。
-2. name と description を確認します。description では、pull request の作成や commit の作成を求められたときに使うべき scenario が示されていることに注目してください。
-3. skill 全体を読みます。branch の作成方法、commit の作り方、pull request の内容に関するルールが定義されていることを確認します。
+skill は Copilot CLI から直接呼び出すことも、自然な言葉で実行を依頼することもできます。3 つのチェックを実行するよう Copilot に依頼しましょう。
 
-## skill を使う
+1. Interactive mode のフィルタリング会話に戻ります。
+2. 次のプロンプトを使います。
 
-先ほど触れたとおり、skill は Copilot CLI によって自動的に呼び出されます。そのため、必要なのは Copilot に PR を作成するよう依頼することだけです。
+   ```plaintext
+   Run the quality-checks skill for unit tests, lint, and type checks.
+   ```
 
-> [!TIP]
-> **Copilot CLI セッションを開始する**
->
-> 以下の演習を始める前に、codespace に戻ってターミナルを開きます（まだ開いていない場合は <kbd>Ctrl</kbd>+<kbd>\`</kbd>）。次に、`--yolo` と `--enable-all-github-mcp-tools` を付けて Copilot CLI を起動します。
->
-> ```bash
-> copilot --yolo --enable-all-github-mcp-tools
-> ```
->
-> 新しく開始する代わりに、このプロジェクトの直近のセッションを引き継ぐには `copilot --yolo --enable-all-github-mcp-tools --continue` を実行します。前の演習から Copilot CLI がすでに実行中であれば、`/clear` を送ってクリーンな会話を開始してください。
->
-> `--enable-all-github-mcp-tools` を付けると、現在のセッションで GitHub MCP の読み取り / 書き込みツールが有効になります。これにより、ワークショップの流れの中で Copilot がバックログを読み取り、pull request を開けるようになります。
+3. 最後に表示されるレポートを確認します。
 
-> [!CAUTION]
-> `--yolo` は完全な自動権限（`--allow-all-tools`、`--allow-all-paths`、`--allow-all-urls`）を有効にします。Codespace や VM のような分離された環境でのみ使用し、日常的な開発の既定値として alias しないでください。詳しくは [Allowing and denying tool use][allow-all-warning] を参照してください。
+## レポートをカスタマイズする
 
-[allow-all-warning]: https://docs.github.com/copilot/how-tos/copilot-cli/use-copilot-cli/allowing-tools
-1. 次のプロンプトを使って、Copilot に PR を作成するよう依頼します。
+実行した内容、成功したかどうか、ツールが報告した内容を確認できる、より良いレポートにしましょう。結果を報告するためのセクションを skill に追加します。
 
-    ```
-    Can you please create a pull request for me!
-    ```
+1. `.github/skills/quality-checks/SKILL.md` に戻ります。
+2. ファイルの末尾に次のセクションを追加します。
 
-2. Copilot がリクエストを受け付けます。しばらくすると、Copilot が **make-contribution** skill を利用していることが表示されます。
+   ```markdown
+   ## Results output formatting
 
-3. その後、Copilot は skill の instruction に従います。まず test を実行し、その後 branch、commit、最終的には PR を作成します。
-4. PR が作成されたら、リポジトリに戻って PR を開きます。セクションが skill で定められたガイドラインに従い、チームの要件に一致していることを確認してください。
-5. 次の演習に進む前に、このフィルタリング PR とアクセシビリティ作業を分けておけるよう、ローカル workspace を `main` から新しい branch にリセットします。
+   Upon completion, report each command that ran and whether it passed, failed, or was blocked. Include test counts, durations, errors, warnings, and other metrics only when the tool reports them. Identify the next action for any failure or blocker, and never describe a skipped or incomplete check as passed.
+   ```
 
-    ```bash
-    git checkout main
-    git pull
-    git checkout -b accessibility-cli
-    ```
+3. ファイルは自動的に保存されます。
+
+## 更新した skill を実行する
+
+変更を加えた skill を Copilot CLI は会話を再起動せずに再読み込みできます。動作を確認しましょう。
+
+1. 次を入力します。
+
+   ```plaintext
+   /skills reload
+   ```
+
+2. 先ほどとまったく同じプロンプトを使います。
+
+   ```plaintext
+   Run the quality-checks skill for unit tests, lint, and type checks.
+   ```
+
+3. 表示されたレポートを確認し、最初のレポートと比べます。
 
 ## まとめと次のステップ
 
-agent skill の助けを借りて、文書化された要件に沿う新しい PR を作成できました。次のことを行いました。
+既存の agent skill をカスタマイズして使いました。このレッスンでは、次のことを行いました。
 
-- pull request 作成用に既存の skill を確認する。
-- AI agent がどのように skill を利用するかを学ぶ。
-- skill の助けを借りて、ガイドラインに沿った PR を作成する。
+- unit test、lint、type check 用の `quality-checks` skill を確認しました。
+- 結果の書式をカスタマイズしました。
+- skill を再読み込みして実行しました。
 
-skill はタスク向けに最適ですが、より高度な作業には [カスタム エージェント][next-lesson] を活用したくなります。次はそれを確認しましょう。
+この変更は、機能のプルリクエストにフィルタリング機能とともに含めます。次は [Playwright MCP server][next-lesson] を使って、Copilot がサイトを直接操作できるようにします。
 
-## リソース
+## skill の例
 
-- [Agent Skills について][about-agent-skills]
-- [Agent Skills 仕様][agent-skills-spec]
-- [Agent Skills リポジトリ][agent-skills-repo]
-- [awesome-copilot の Agent Skills][awesome-copilot-skills]
+以下はコミュニティによる参考例であり、このレッスンの追加課題ではありません。
 
-[previous-lesson]: ../4-mcp/
-[next-lesson]: ../6-custom-agents/
-[about-agent-skills]: https://docs.github.com/copilot/concepts/agents/about-agent-skills
-[awesome-copilot-skills]: https://github.com/github/awesome-copilot/tree/main/skills
+- [Agent Skills 仕様][skill-spec]
+- [コントリビューションのワークフロー: `make-repo-contribution`][contribution-example]
+- [要件文書: `prd`][prd-example]
+- [図と同梱の export script: `drawio`][drawio-example]
+- [ブラウザーテスト: `webapp-testing`][browser-example]
+
+[previous-lesson]: ../4-custom-instructions/
+[next-lesson]: ../6-mcp-playwright/
+[skill-spec]: https://agentskills.io/specification
+[contribution-example]: https://github.com/github/awesome-copilot/tree/main/skills/make-repo-contribution
+[prd-example]: https://github.com/github/awesome-copilot/tree/main/skills/prd
+[drawio-example]: https://github.com/github/awesome-copilot/tree/main/skills/drawio
+[browser-example]: https://github.com/github/awesome-copilot/tree/main/skills/webapp-testing
